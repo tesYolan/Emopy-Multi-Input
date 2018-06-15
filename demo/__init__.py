@@ -83,7 +83,6 @@ def start_image_demo(args,model):
         face_imag = gray[
             max(0,face.top()):min(gray.shape[0],face.bottom()),
             max(0,face.left()):min(gray.shape[1],face.right())
-
         ]
         
         face_imag = cv2.resize(face_imag,(image_shape[0],image_shape[1]))

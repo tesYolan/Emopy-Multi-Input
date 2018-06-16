@@ -10,3 +10,6 @@ tmp/*
 !logs/.gitkeep
 snet.config
 snetd*
+request_face
+.cache/*
+.pytest*/*

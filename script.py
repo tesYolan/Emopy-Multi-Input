@@ -1,6 +1,7 @@
 import base64
 import random
 import os
+import tempfile
 import numpy as np
 from aiohttp import web
 from jsonrpcserver.aio import methods
@@ -10,6 +11,8 @@ from demo import load_model_from_args, start_image_demo
 '''
 In this function, we would call the fucntion with args set as values
 '''
+
+
 class Args:
     def __init__(self):
         self.json = 'models/models/model-ff.json'
@@ -20,15 +23,20 @@ class Args:
         self.gui = False
         self.path = ''
         self.image = ''
+
+
 class Model:
     def __init__(self):
         self.args = Args()
         self.model = load_model_from_args(self.args)
+
     def predict(self):
         return start_image_demo(self.args, self.model)
 
+
 app = web.Application()
 model = Model()
+
 
 @methods.add
 async def classify(**kwargs):
@@ -39,16 +47,14 @@ async def classify(**kwargs):
     if image_type is None:
         raise InvalidParams("image type is required")
     binary_image = base64.b64decode(image)
-    # this requires that we save the file. 
-    current_files = os.listdir('tmp')
-    tmp_file_name = 'tmp/tmp_' + str(random.randint(0,100000000000)) +'_.' + str(image_type)
-    while tmp_file_name in current_files:
-        tmp_file_name = 'tmp/tmp_' + str(random.randint(0,100000000000)) +'_.' + str(image_type)
-    with open(tmp_file_name,'wb') as f:
-        f.write(binary_image)
-    model.args.path = tmp_file_name
+    tmp_file_name = tempfile.NamedTemporaryFile()
+    tmp_file_name.write(binary_image)
+    model.args.path = tmp_file_name.name
     bounding_boxes, emotions = model.predict()
-    return {"bounding boxes": str(bounding_boxes),"predictions": str(emotions)}
+
+    return {"bounding boxes": str(bounding_boxes), "predictions": str(emotions)}
+
+
 async def handle(request):
     request = await request.text()
     response = await methods.dispatch(request)
@@ -61,7 +67,7 @@ async def handle(request):
 if __name__ == '__main__':
     app.router.add_post('/', handle)
     # create a tmp folder if it doesn't exist to hold files
-    try: 
+    try:
         os.mkdir('tmp')
     except OSError:
         print('tmp folder already exists, not created')

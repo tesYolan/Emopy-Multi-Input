@@ -9,6 +9,11 @@ import pprint
 import subprocess
 import yaml
 
+import sys
+# TODO be better at python3.6 module management
+sys.path = sys.path + ['.']
+import snet
+
 with open("turtles.png", "rb") as f:
     IMG = f.read()
     IMAGE_64 = base64.b64encode(IMG).decode("utf-8")
@@ -38,102 +43,44 @@ def test_emotion_rpc_call():
 
 def test_face_detect_agent_availability():
     """test_face_detect_agent_availability"""
-    process = subprocess.Popen(
-        ["snet", "registry", "query", "face_detect"], stdout=subprocess.PIPE, stdin=subprocess.PIPE)
-    try:
-        outs, errs = process.communicate(timeout=30)
-        assert errs is None, "Something went bad when querying for face_detect. Does it exist?"
-        record = yaml.load(outs)
-        assert F_DETECT_ADDRESS == record["record"]["agent"], "Face detect address registered and expected address do not match. Expected {} but got {}".format(
-            F_DETECT_ADDRESS, record["record"]["agent"])
-    except subprocess.TimeoutExpired:
-        # Kill process and then communicate to make sure it has exited.
-        process.kill()
-        outs, errs = process.communicate()
+    print(snet.agent_availability("face_detect"))
+    record, _, errs = snet.agent_availability("face_detect")
+    assert errs is None, "Something went bad when querying for face_detect. Does it exist?"
+    assert F_DETECT_ADDRESS == record["record"]["agent"], "Face detect address registered and expected address do not match. Expected {} but got {}".format(F_DETECT_ADDRESS, record["record"]["agent"])
 
 
 def test_face_detect_agent_call():
-    """test_fBadace_detect_agent_call"""
-    process = subprocess.Popen(["snet", "agent", "--at", F_DETECT_ADDRESS, "create-jobs", "--number", "1", "--funded",
-                                "--signed", "--no-confirm", "--max-price", "1000000"], stdout=subprocess.PIPE, stdin=subprocess.PIPE)
-    try:
-        outs, errs = process.communicate(timeout=120)
-        print(outs)
-        assert errs is None, "There is error when creating jobs at agent {}".format(
-            F_DETECT_ADDRESS)
-        result = yaml.load(outs)['jobs'][0]
-    except subprocess.TimeoutExpired:
-        process.kill()
-        outs, errs = process.communicate()
+    """test_face_detect_agent_call"""
+    result, _, errs = snet.agent_job_create(F_DETECT_ADDRESS)
+    assert errs is None, "There is error when creating jobs at agent {}".format(F_DETECT_ADDRESS)
 
-    # Now, let's get the end point of the service.
+    endpoint, _, errs = snet.agent_job_endpoint(F_DETECT_ADDRESS)
+    assert errs is None, "Error when looking for endpoint of an agent at {}".format(F_DETECT_ADDRESS)
 
-    process = subprocess.Popen(["snet", "contract", "Agent", "--at", F_DETECT_ADDRESS,
-                                "endpoint"], stdout=subprocess.PIPE, stdin=subprocess.PIPE)
-    try:
-        outs, errs = process.communicate(timeout=120)
-        assert errs is None, "Error when looking for endpoint of an agent at {}".format(
-            F_DETECT_ADDRESS)
-        endpoint = outs.decode('utf-8').splitlines()[0]
-        print(endpoint)
-    except subprocess.TimeoutExpired:
-        process.kill()
-        outs, errs = process.communicate()
+    request = {"image": IMAGE_64, "algorithm": "dlib_cnn"}
 
-    request = {"image": IMAGE_64, "algorithm": "dlib_cnn",
-               "job_address": result["job_address"], "job_signature": result["job_signature"]}
-
-    response = jsonrpcclient.request(endpoint, "find_face", request)
+    response = snet.agent_rpc_call(request, "find_face", result, endpoint)
 
     assert response == RETURNED_RESULT_DLIB_CNN, "Expected results and returned face detections don't match"
 
 
 def test_face_landmarks_agent_availability():
     """test_face_landmarks_agent_availability"""
-    process = subprocess.Popen(["snet", "registry", "query", "face_landmarks"],
-                               stdout=subprocess.PIPE, stdin=subprocess.PIPE)
-    try:
-        outs, errs = process.communicate(timeout=30)
-        record = yaml.load(outs)
-        print(record)
-        assert errs is None
-    except subprocess.TimeoutExpired:
-        # Kill process and then communicate to make sure it has exited.
-        process.kill()
-        outs, errs = process.communicate()
+    record, _, errs = snet.agent_availability("face_landmarks")
+    assert errs is None, "Something went bad when querying for face_detect. Does it exist?"
+    assert F_LANDMARK_ADDRESS == record["record"]["agent"], "Face detect address registered and expected address do not match. Expected {} but got {}".format(F_LANDMARK_ADDRESS, record["record"]["agent"])
+
 
 
 def test_face_landmarks_agent_call():
     """test_face_landmarks_agent_call"""
-    process = subprocess.Popen(["snet", "agent", "--at", F_LANDMARK_ADDRESS, "create-jobs", "--number", "1", "--funded",
-                                "--signed", "--no-confirm", "--max-price", "1000000"], stdout=subprocess.PIPE, stdin=subprocess.PIPE)
-    try:
-        outs, errs = process.communicate(timeout=120)
-        assert errs is None, "There is error when creating jobs at agent {}".format(
-            F_LANDMARK_ADDRESS)
-        result = yaml.load(outs)['jobs'][0]
-        print(result)
-    except subprocess.TimeoutExpired:
-        # Kill process and then communicate to make sure it has exited.
-        process.kill()
-        outs, errs = process.communicate()
+    result, out, errs = snet.agent_job_create(F_LANDMARK_ADDRESS)
+    assert errs is None, "There is error when creating jobs at agent {}".format(F_DETECT_ADDRESS)
 
-    process = subprocess.Popen(["snet", "contract", "Agent", "--at", F_LANDMARK_ADDRESS,
-                                "endpoint"], stdout=subprocess.PIPE, stdin=subprocess.PIPE)
+    endpoint, out, errs = snet.agent_job_endpoint(F_LANDMARK_ADDRESS)
+    assert errs is None, "Error when looking for endpoint of an agent at {}".format(F_DETECT_ADDRESS)
 
-    try:
-        outs, errs = process.communicate(timeout=120)
-        assert errs is None, "Error when looking for endpoint of an agent at {}".format(
-            F_LANDMARK_ADDRESS)
-        endpoint = outs.decode('utf-8').splitlines()[0]
-        print(endpoint)
-    except subprocess.TimeoutExpired:
-        process.kill()
-        outs, errs = process.communicate()
+    request = {"image": IMAGE_64, "landmark_model": "68", "face_bboxes": RETURNED_RESULT_DLIB_HOG['faces']}
 
-    request = {"image": IMAGE_64, "landmark_model": "68", "face_bboxes": RETURNED_RESULT_DLIB_HOG['faces'],
-               "job_address": result["job_address"], "job_signature": result["job_signature"]}
-
-    response = jsonrpcclient.request(endpoint, "get_landmarks", request)
-
+    response = snet.agent_rpc_call(request, "get_landmarks", result, endpoint)
     PP.pprint(response)
